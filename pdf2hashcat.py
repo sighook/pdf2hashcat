@@ -36,7 +36,7 @@ class PdfParser:
         self.encrypted = f.read()
         f.close()
         self.process = True
-        psr = re.compile(b'PDF-\d\.\d')
+        psr = re.compile(rb'PDF-\d\.\d')
         try:
             self.pdf_spec = psr.findall(self.encrypted)[0]
         except IndexError:
@@ -60,15 +60,15 @@ class PdfParser:
             raise RuntimeError("Could not find object id")
         encryption_dictionary = self.get_encryption_dictionary(object_id)
         # print >> sys.stderr, encryption_dictionary
-        dr = re.compile(b'\d+')
-        vr = re.compile(b'\/V \d')
-        rr = re.compile(b'\/R \d')
+        dr = re.compile(rb'\d+')
+        vr = re.compile(rb'\/V \d')
+        rr = re.compile(rb'\/R \d')
         try:
             v = dr.findall(vr.findall(encryption_dictionary)[0])[0]
         except IndexError:
             raise RuntimeError("Could not find /V")
         r = dr.findall(rr.findall(encryption_dictionary)[0])[0]
-        lr = re.compile(b'\/Length \d+')
+        lr = re.compile(rb'\/Length \d+')
         longest = 0
         # According to the docs:
         # Length : (Optional; PDF 1.4; only if V is 2 or 3). Default value: 40
@@ -77,21 +77,21 @@ class PdfParser:
             if(int(dr.findall(le)[0]) > longest):
                 longest = int(dr.findall(le)[0])
                 length = dr.findall(le)[0]
-        pr = re.compile(b'\/P -?\d+')
+        pr = re.compile(rb'\/P -?\d+')
         try:
             p = pr.findall(encryption_dictionary)[0]
         except IndexError:
                 # print >> sys.stderr, "** dict:", encryption_dictionary
                 raise RuntimeError("Could not find /P")
-        pr = re.compile(b'-?\d+')
+        pr = re.compile(rb'-?\d+')
         p = pr.findall(p)[0]
         meta = '1' if self.is_meta_data_encrypted(encryption_dictionary) else '0'
-        idr = re.compile(b'\/ID\s*\[\s*<\w+>\s*<\w+>\s*\]')
+        idr = re.compile(rb'\/ID\s*\[\s*<\w+>\s*<\w+>\s*\]')
         try:
             i_d = idr.findall(trailer)[0] # id key word
         except IndexError:
             # some pdf files use () instead of <>
-            idr = re.compile(b'\/ID\s*\[\s*\(\w+\)\s*\(\w+\)\s*\]')
+            idr = re.compile(rb'\/ID\s*\[\s*\(\w+\)\s*\(\w+\)\s*\]')
             try:
                 i_d = idr.findall(trailer)[0] # id key word
             except IndexError:
@@ -99,11 +99,11 @@ class PdfParser:
                 # print >> sys.stderr, "** trailer:", trailer
                 raise RuntimeError("Could not find /ID tag")
                 return
-        idr = re.compile(b'<\w+>')
+        idr = re.compile(rb'<\w+>')
         try:
             i_d = idr.findall(trailer)[0]
         except IndexError:
-            idr = re.compile(b'\(\w+\)')
+            idr = re.compile(rb'\(\w+\)')
             i_d = idr.findall(trailer)[0]
         i_d = i_d.replace(b'<',b'')
         i_d = i_d.replace(b'>',b'')
@@ -123,14 +123,14 @@ class PdfParser:
         if(b"1.7" in self.pdf_spec):
             letters = [b"U", b"O", b"UE", b"OE"]
         for let in letters:
-            pr_str = b'\/' + let + b'\s*\([^)]+\)'
+            pr_str = rb'\/' + let + rb'\s*\([^)]+\)'
             pr = re.compile(pr_str)
             pas = pr.findall(encryption_dictionary)
             if(len(pas) > 0):
                 pas = pr.findall(encryption_dictionary)[0]
                 # because regexs in python suck <=== LOL
                 while(pas[-2] == b'\\'):
-                    pr_str += b'[^)]+\)'
+                    pr_str += rb'[^)]+\)'
                     pr = re.compile(pr_str)
                     # print >> sys.stderr, "pr_str:", pr_str
                     # print >> sys.stderr, encryption_dictionary
@@ -140,12 +140,12 @@ class PdfParser:
                         break
                 output += self.get_password_from_byte_string(pas)+"*"
             else:
-                pr = re.compile(let + b'\s*<\w+>')
+                pr = re.compile(let + rb'\s*<\w+>')
                 pas = pr.findall(encryption_dictionary)
                 if not pas:
                     continue
                 pas = pas[0]
-                pr = re.compile(b'<\w+>')
+                pr = re.compile(rb'<\w+>')
                 pas = pr.findall(pas)[0]
                 pas = pas.replace(b"<",b"")
                 pas = pas.replace(b">",b"")
@@ -156,9 +156,9 @@ class PdfParser:
         return output[:-1]
 
     def is_meta_data_encrypted(self, encryption_dictionary):
-        mr = re.compile(b'\/EncryptMetadata\s\w+')
+        mr = re.compile(rb'\/EncryptMetadata\s\w+')
         if(len(mr.findall(encryption_dictionary)) > 0):
-            wr = re.compile(b'\w+')
+            wr = re.compile(rb'\w+')
             is_encrypted = wr.findall(mr.findall(encryption_dictionary)[0])[-1]
             if(is_encrypted == b"false"):
                 return False
@@ -210,13 +210,13 @@ class PdfParser:
         return encryption_dictionary
 
     def get_object_id(self, name , trailer):
-        oir = re.compile(b'\/' + name + b'\s\d+\s\d\sR')
+        oir = re.compile(rb'\/' + name + rb'\s\d+\s\d\sR')
         try:
             object_id = oir.findall(trailer)[0]
         except IndexError:
             # print >> sys.stderr, " ** get_object_id: name \"", name, "\", trailer ", trailer
             return ""
-        oir = re.compile(b'\d+ \d')
+        oir = re.compile(rb'\d+ \d')
         object_id = oir.findall(object_id)[0]
         return object_id
 
@@ -305,10 +305,10 @@ class PdfParser:
         return str(output)+'*'+pas[:-2]
 
     def unescape(self, esc):
-        escape_seq_map = {'\\n':"\n", '\\s':"\s", '\\e':"\e",
-                '\\r':"\r", '\\t':"\t", '\\v':"\v", '\\f':"\f",
-                '\\b':"\b", '\\a':"\a", "\\)":")",
-                "\\(":"(", "\\\\":"\\" }
+        escape_seq_map = {'\\n':r"\n", '\\s':r"\s", '\\e':r"\e",
+                '\\r':r"\r", '\\t':r"\t", '\\v':r"\v", '\\f':r"\f",
+                '\\b':r"\b", '\\a':r"\a", "\\)":")",
+                "\\(":"(", "\\\\":r"\\" }
 
         return escape_seq_map[esc]
 
