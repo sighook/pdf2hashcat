@@ -86,12 +86,12 @@ class PdfParser:
         pr = re.compile(rb'-?\d+')
         p = pr.findall(p)[0]
         meta = '1' if self.is_meta_data_encrypted(encryption_dictionary) else '0'
-        idr = re.compile(rb'\/ID\s*\[\s*<\w+>\s*<\w+>\s*\]')
+        idr = re.compile(rb'\/ID\s*\[\s*<\w*>\s*<\w*>\s*\]')
         try:
             i_d = idr.findall(trailer)[0] # id key word
         except IndexError:
             # some pdf files use () instead of <>
-            idr = re.compile(rb'\/ID\s*\[\s*\(\w+\)\s*\(\w+\)\s*\]')
+            idr = re.compile(rb'\/ID\s*\[\s*\(\w*\)\s*\(\w*\)\s*\]')
             try:
                 i_d = idr.findall(trailer)[0] # id key word
             except IndexError:
