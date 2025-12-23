@@ -99,11 +99,11 @@ class PdfParser:
                 # print >> sys.stderr, "** trailer:", trailer
                 raise RuntimeError("Could not find /ID tag")
                 return
-        idr = re.compile(rb'<\w+>')
+        idr = re.compile(rb'<\w*>')
         try:
             i_d = idr.findall(trailer)[0]
         except IndexError:
-            idr = re.compile(rb'\(\w+\)')
+            idr = re.compile(rb'\(\w*\)')
             i_d = idr.findall(trailer)[0]
         i_d = i_d.replace(b'<',b'')
         i_d = i_d.replace(b'>',b'')
