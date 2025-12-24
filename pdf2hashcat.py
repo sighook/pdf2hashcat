@@ -59,6 +59,11 @@ class PdfParser:
         if(len(object_id) == 0):
             raise RuntimeError("Could not find object id")
         encryption_dictionary = self.get_encryption_dictionary(object_id)
+
+        # Check for unsupported encryption filters
+        if b'/FOPN_foweb' in encryption_dictionary:
+            raise RuntimeError("Unsupported encryption filter: /FOPN_foweb (FileOpen DRM).")
+
         # print >> sys.stderr, encryption_dictionary
         dr = re.compile(rb'\d+')
         vr = re.compile(rb'\/V \d')
