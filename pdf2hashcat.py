@@ -107,7 +107,10 @@ class PdfParser:
             i_d = idr.findall(trailer)[0]
         i_d = i_d.replace(b'<',b'')
         i_d = i_d.replace(b'>',b'')
+        i_d = i_d.replace(b'(',b'')
+        i_d = i_d.replace(b')',b'')
         i_d = i_d.lower()
+
         passwords = self.get_passwords_for_JtR(encryption_dictionary)
         output = '$pdf$'+v.decode('ascii')+'*'+r.decode('ascii')+'*'+length.decode('ascii')+'*'
         output += p.decode('ascii')+'*'+meta+'*'
