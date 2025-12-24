@@ -86,12 +86,12 @@ class PdfParser:
         pr = re.compile(rb'-?\d+')
         p = pr.findall(p)[0]
         meta = '1' if self.is_meta_data_encrypted(encryption_dictionary) else '0'
-        idr = re.compile(rb'\/ID\s*\[\s*<\w+>\s*<\w+>\s*\]')
+        idr = re.compile(rb'\/ID\s*\[\s*<\w*>\s*<\w*>\s*\]')
         try:
             i_d = idr.findall(trailer)[0] # id key word
         except IndexError:
             # some pdf files use () instead of <>
-            idr = re.compile(rb'\/ID\s*\[\s*\(\w+\)\s*\(\w+\)\s*\]')
+            idr = re.compile(rb'\/ID\s*\[\s*\(\w*\)\s*\(\w*\)\s*\]')
             try:
                 i_d = idr.findall(trailer)[0] # id key word
             except IndexError:
@@ -99,11 +99,11 @@ class PdfParser:
                 # print >> sys.stderr, "** trailer:", trailer
                 raise RuntimeError("Could not find /ID tag")
                 return
-        idr = re.compile(rb'<\w+>')
+        idr = re.compile(rb'<\w*>')
         try:
             i_d = idr.findall(trailer)[0]
         except IndexError:
-            idr = re.compile(rb'\(\w+\)')
+            idr = re.compile(rb'\(\w*\)')
             i_d = idr.findall(trailer)[0]
         i_d = i_d.replace(b'<',b'')
         i_d = i_d.replace(b'>',b'')
