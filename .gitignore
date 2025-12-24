@@ -1,1 +1,9 @@
+# vim undo and swap files
+.*.un~
+*.swp
+
+# backup files
+*.bak
+
+# unit tests cache
 __pycache__
