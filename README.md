@@ -41,7 +41,7 @@ cd pdf2hashcat
 hashcat -m $MODE -a 0 document.hash wordlist.txt
 
 # Crack using brute-force (example:  6-digit numeric PIN)
-hashcat -m $MODE -a 3 document.hash ?d?d?d?d?d?d
+hashcat -m $MODE -a 3 document.hash '?d?d?d?d?d?d'
 ```
 
 ## Hashcat Modes
@@ -98,7 +98,7 @@ python -m unittest test_pdf2hashcat.py
 
 ## License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ## Credits
 
@@ -108,4 +108,4 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Contributions are welcome! Please feel free to submit a Pull Request.
