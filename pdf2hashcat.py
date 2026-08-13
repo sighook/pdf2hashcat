@@ -317,10 +317,10 @@ class PdfParser:
         return str(output)+'*'+pas[:-2]
 
     def unescape(self, esc):
-        escape_seq_map = {'\\n':r"\n", '\\s':r"\s", '\\e':r"\e",
-                '\\r':r"\r", '\\t':r"\t", '\\v':r"\v", '\\f':r"\f",
-                '\\b':r"\b", '\\a':r"\a", "\\)":")",
-                "\\(":"(", "\\\\":r"\\" }
+        escape_seq_map = {'\\n':"\n", '\\s':"s", '\\e':"\x1b",
+                '\\r':"\r", '\\t':"\t", '\\v':"\v", '\\f':"\f",
+                '\\b':"\b", '\\a':"\a", "\\)":")",
+                "\\(":"(", "\\\\":"\\" }
 
         return escape_seq_map[esc]
 
