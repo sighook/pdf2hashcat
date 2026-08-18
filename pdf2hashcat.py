@@ -137,7 +137,7 @@ class PdfParser:
             if(len(pas) > 0):
                 pas = pr.findall(encryption_dictionary)[0]
                 # because regexs in python suck <=== LOL
-                while(pas[-2] == b'\\'):
+                while(pas[-2] == "\\"[0]):
                     pr_str += rb'[^)]+\)'
                     pr = re.compile(pr_str)
                     # print >> sys.stderr, "pr_str:", pr_str
