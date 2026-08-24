@@ -269,60 +269,77 @@ class PdfParser:
                         inside_first = False
         return output
 
-    def get_hex_byte(self, o_or_u, i):
-        if PY3:
-            return hex(o_or_u[i]).replace('0x', '')
-        else:
-            return hex(ord(o_or_u[i])).replace('0x', '')
-
     def get_password_from_byte_string(self, o_or_u):
-        pas = ""
-        escape_seq = False
-        escapes = 0
-        excluded_indexes = [0, 1, 2]
-        #For UE & OE in 1.7 spec
-        if not PY3:
-            if(o_or_u[2] != '('):
-                excluded_indexes.append(3)
-        else:
-            if(o_or_u[2] != 40):
-                excluded_indexes.append(3)
-        for i in range(len(o_or_u)):
-            if(i not in excluded_indexes):
-                if(len(self.get_hex_byte(o_or_u, i)) == 1 \
-                   and o_or_u[i] != "\\"[0]):
-                    pas += "0"  # need to be 2 digit hex numbers
-                is_back_slash = True
-                if not PY3:
-                    is_back_slash = o_or_u[i] != "\\"[0]
-                else:
-                    is_back_slash = o_or_u[i] != 92
-                if(is_back_slash or escape_seq):
-                    if(escape_seq):
-                        if not PY3:
-                            esc = "\\"+o_or_u[i]
-                        else:
-                            esc = "\\"+chr(o_or_u[i])
-                        esc = self.unescape(esc)
-                        if(len(hex(ord(esc[0])).replace('0x', '')) == 1):
-                            pas += "0"
-                        pas += hex(ord(esc[0])).replace('0x', '')
-                        escape_seq = False
-                    else:
-                        pas += self.get_hex_byte(o_or_u, i)
-                else:
-                    escape_seq = True
-                    escapes += 1
-        output = len(o_or_u)-(len(excluded_indexes)+1)-escapes
-        return str(output)+'*'+pas[:-2]
+        start = o_or_u.find(b"(")
+        if start == -1 or not o_or_u.endswith(b")"):
+            raise RuntimeError("Malformed PDF literal string")
 
-    def unescape(self, esc):
-        escape_seq_map = {'\\n':r"\n", '\\s':r"\s", '\\e':r"\e",
-                '\\r':r"\r", '\\t':r"\t", '\\v':r"\v", '\\f':r"\f",
-                '\\b':r"\b", '\\a':r"\a", "\\)":")",
-                "\\(":"(", "\\\\":r"\\" }
+        value = self._decode_literal_string(o_or_u[start + 1:-1])
+        return str(len(value)) + "*" + value.hex()
 
-        return escape_seq_map[esc]
+    def _decode_literal_string(self, value):
+        output = bytearray()
+        i = 0
+        escapes = {
+            ord("n"): 0x0a,
+            ord("r"): 0x0d,
+            ord("t"): 0x09,
+            ord("b"): 0x08,
+            ord("f"): 0x0c,
+            ord("("): ord("("),
+            ord(")"): ord(")"),
+            ord("\\"): ord("\\"),
+        }
+
+        while i < len(value):
+            current = value[i]
+
+            if current != ord("\\"):
+                if current == 0x0d:
+                    output.append(0x0a)
+                    if i + 1 < len(value) and value[i + 1] == 0x0a:
+                        i += 1
+                elif current == 0x0a:
+                    output.append(0x0a)
+                else:
+                    output.append(current)
+                i += 1
+                continue
+
+            i += 1
+            if i == len(value):
+                break
+
+            escaped = value[i]
+            if escaped in escapes:
+                output.append(escapes[escaped])
+                i += 1
+                continue
+
+            if ord("0") <= escaped <= ord("7"):
+                end = i + 1
+                while end < len(value) and end < i + 3 \
+                        and ord("0") <= value[end] <= ord("7"):
+                    end += 1
+                output.append(int(value[i:end], 8) & 0xff)
+                i = end
+                continue
+
+            if escaped == 0x0d:
+                i += 1
+                if i < len(value) and value[i] == 0x0a:
+                    i += 1
+                continue
+
+            if escaped == 0x0a:
+                i += 1
+                continue
+
+            # PDF treats an unrecognized escape as the escaped byte itself.
+            output.append(escaped)
+            i += 1
+
+        return bytes(output)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

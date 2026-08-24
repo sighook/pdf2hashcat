@@ -190,6 +190,40 @@ class TestPdfParser(unittest.TestCase):
         self._assert_parse_fails_with(parser, "FOPN_foweb")
 
     # =========================================================================
+    # Encryption dictionary string tests
+    # =========================================================================
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_named_escapes(self, mock_file):
+        """PDF-defined literal escapes must become their byte values."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (A\\nB\\rC\\tD\\bE\\fF\\\\G) /O (owner)"
+        )
+        self.assertEqual(
+            values,
+            "13*410a420d43094408450c465c47*5*6f776e6572",
+        )
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_unknown_escapes_drop_backslash(self, mock_file):
+        """Unknown PDF escapes preserve the byte and discard the backslash."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (\\s\\e\\v\\a) /O (owner)"
+        )
+        self.assertEqual(values, "4*73657661*5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_octal_and_line_rules(self, mock_file):
+        """Octal escapes and PDF line handling must decode before hashing."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (A\\101\\12B\\\r\nC\rD\nE) /O (owner)"
+        )
+        self.assertEqual(values, "9*41410a42430a440a45*5*6f776e6572")
+
+    # =========================================================================
     # Compact object layout tests (no newline before "<id> obj")
     # =========================================================================
 
