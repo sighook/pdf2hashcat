@@ -59,7 +59,7 @@ hashcat -m $MODE -a 3 document.hash '?d?d?d?d?d?d'
 To view all PDF-related modes supported by your hashcat version:
 
 ```sh
-hashcat --help | grep -i pdf
+hashcat -hh | grep -i pdf
 ```
 
 ## Output Format
