@@ -8,6 +8,7 @@ Run tests:
     python -m pytest test_pdf2hashcat.py
 """
 
+import io
 import unittest
 from unittest.mock import patch, mock_open
 from pdf2hashcat import PdfParser
@@ -46,10 +47,17 @@ class TestPdfParser(unittest.TestCase):
         mock_get_dict.return_value = enc_dict or self.STANDARD_ENC_DICT
         return PdfParser("dummy.pdf")
 
+    def _parse_output(self, parser):
+        """Run the parser and return the emitted hash without its newline."""
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            parser.parse()
+        return output.getvalue().rstrip("\n")
+
     def _assert_parse_succeeds(self, parser, msg="Parse should succeed"):
         """Assert that parser.parse() completes without exception."""
         try:
-            parser.parse()
+            return self._parse_output(parser)
         except Exception as exc:
             self.fail(f"{msg}: {exc}")
 
