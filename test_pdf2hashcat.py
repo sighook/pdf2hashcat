@@ -275,6 +275,24 @@ class TestPdfParser(unittest.TestCase):
                 b"] /Encrypt " + encrypt_ref + b" R>>\n%%EOF"
         return body
 
+    def test_parse_emits_decoded_literal_string_hash(self):
+        """Literal string syntax must be reflected in the emitted hash."""
+        enc_dict = b"<</V 2 /R 3 /Length 128 /P -3904 " \
+                   b"/Filter /Standard " \
+                   b"/U (left\\)right) /O (\\101\\e)>>"
+        pdf_bytes = self._make_pdf_bytes(
+            [(b"1 0", b"<</Type /Catalog>>"),
+             (b"5 0", enc_dict)],
+        )
+        with patch("builtins.open", mock_open(read_data=pdf_bytes)):
+            parser = PdfParser("dummy.pdf")
+
+        self.assertEqual(
+            self._parse_output(parser),
+            "$pdf$2*3*128*-3904*1*2*abcd*"
+            "10*6c656674297269676874*2*4165",
+        )
+
     def test_compact_layout_encrypt_object(self):
         """Encrypt object preceded by space (not \\r\\n) must still parse.
 
