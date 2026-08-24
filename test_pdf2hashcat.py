@@ -223,6 +223,43 @@ class TestPdfParser(unittest.TestCase):
         )
         self.assertEqual(values, "9*41410a42430a440a45*5*6f776e6572")
 
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_escaped_closing_parenthesis(self, mock_file):
+        """An escaped right parenthesis is data, not the string terminator."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (left\\)right) /O (owner)"
+        )
+        self.assertEqual(
+            values,
+            "10*6c656674297269676874*5*6f776e6572",
+        )
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_balanced_parentheses(self, mock_file):
+        """Balanced unescaped parentheses may occur inside a PDF string."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (a(b)c) /O (owner)"
+        )
+        self.assertEqual(values, "5*6128622963*5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_empty_literal_string_value(self, mock_file):
+        """Empty literal strings are valid PDF string objects."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(b"/U () /O (owner)")
+        self.assertEqual(values, "0**5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_hex_string_whitespace_and_odd_nibble(self, mock_file):
+        """Hex strings ignore PDF whitespace and pad a final odd nibble."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U <61 62\n6> /O <6f776e6572>"
+        )
+        self.assertEqual(values, "3*616260*5*6f776e6572")
+
     # =========================================================================
     # Compact object layout tests (no newline before "<id> obj")
     # =========================================================================

@@ -126,42 +126,97 @@ class PdfParser:
             sys.stdout.write("%s\n" % output)
 
     def get_passwords_for_JtR(self, encryption_dictionary):
-        output = ""
+        values = []
         letters = [b"U", b"O"]
-        if(b"1.7" in self.pdf_spec):
+        if b"1.7" in self.pdf_spec:
             letters = [b"U", b"O", b"UE", b"OE"]
-        for let in letters:
-            pr_str = rb'\/' + let + rb'\s*\([^)]+\)'
-            pr = re.compile(pr_str)
-            pas = pr.findall(encryption_dictionary)
-            if(len(pas) > 0):
-                pas = pr.findall(encryption_dictionary)[0]
-                # because regexs in python suck <=== LOL
-                while(pas[-2] == b'\\'):
-                    pr_str += rb'[^)]+\)'
-                    pr = re.compile(pr_str)
-                    # print >> sys.stderr, "pr_str:", pr_str
-                    # print >> sys.stderr, encryption_dictionary
-                    try:
-                        pas = pr.findall(encryption_dictionary)[0]
-                    except IndexError:
-                        break
-                output += self.get_password_from_byte_string(pas)+"*"
-            else:
-                pr = re.compile(let + rb'\s*<\w+>')
-                pas = pr.findall(encryption_dictionary)
-                if not pas:
-                    continue
-                pas = pas[0]
-                pr = re.compile(rb'<\w+>')
-                pas = pr.findall(pas)[0]
-                pas = pas.replace(b"<",b"")
-                pas = pas.replace(b">",b"")
-                if PY3:
-                    output += str(int(len(pas)/2))+'*'+str(pas.lower(),'ascii')+'*'
-                else:
-                    output += str(int(len(pas)/2))+'*'+pas.lower()+'*'
-        return output[:-1]
+
+        for name in letters:
+            value = self._get_pdf_string(encryption_dictionary, name)
+            if value is not None:
+                values.append(str(len(value)) + "*" + value.hex())
+
+        return "*".join(values)
+
+    def _get_pdf_string(self, data, name):
+        pattern = rb"/" + re.escape(name) + rb"(?=[\x00\t\n\f\r <(])"
+        match = re.search(pattern, data)
+        if match is None:
+            return None
+
+        i = match.end()
+        whitespace = b"\x00\t\n\f\r "
+        while i < len(data) and data[i] in whitespace:
+            i += 1
+
+        if i == len(data):
+            return None
+
+        if data[i] == ord("("):
+            literal = self._read_literal_string(data, i)
+            return self._decode_literal_string(literal)
+
+        if data[i] == ord("<"):
+            return self._read_hex_string(data, i)
+
+        return None
+
+    def _read_literal_string(self, data, start):
+        value = bytearray()
+        depth = 1
+        i = start + 1
+
+        while i < len(data):
+            current = data[i]
+
+            if current == ord("\\"):
+                value.append(current)
+                i += 1
+                if i == len(data):
+                    raise RuntimeError("Unterminated PDF literal string")
+                value.append(data[i])
+                if data[i] == 0x0d and i + 1 < len(data) \
+                        and data[i + 1] == 0x0a:
+                    i += 1
+                    value.append(data[i])
+                i += 1
+                continue
+
+            if current == ord("("):
+                depth += 1
+                value.append(current)
+                i += 1
+                continue
+
+            if current == ord(")"):
+                depth -= 1
+                if depth == 0:
+                    return bytes(value)
+                value.append(current)
+                i += 1
+                continue
+
+            value.append(current)
+            i += 1
+
+        raise RuntimeError("Unterminated PDF literal string")
+
+    def _read_hex_string(self, data, start):
+        end = data.find(b">", start + 1)
+        if end == -1:
+            raise RuntimeError("Unterminated PDF hexadecimal string")
+
+        encoded = bytes(
+            byte for byte in data[start + 1:end]
+            if byte not in b"\x00\t\n\f\r "
+        )
+        if len(encoded) % 2:
+            encoded += b"0"
+
+        try:
+            return bytes.fromhex(encoded.decode("ascii"))
+        except (UnicodeDecodeError, ValueError):
+            raise RuntimeError("Malformed PDF hexadecimal string")
 
     def is_meta_data_encrypted(self, encryption_dictionary):
         mr = re.compile(rb'\/EncryptMetadata\s\w+')
@@ -268,14 +323,6 @@ class PdfParser:
                         output = b""
                         inside_first = False
         return output
-
-    def get_password_from_byte_string(self, o_or_u):
-        start = o_or_u.find(b"(")
-        if start == -1 or not o_or_u.endswith(b")"):
-            raise RuntimeError("Malformed PDF literal string")
-
-        value = self._decode_literal_string(o_or_u[start + 1:-1])
-        return str(len(value)) + "*" + value.hex()
 
     def _decode_literal_string(self, value):
         output = bytearray()
