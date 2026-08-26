@@ -8,6 +8,7 @@ Run tests:
     python -m pytest test_pdf2hashcat.py
 """
 
+import io
 import unittest
 from unittest.mock import patch, mock_open
 from pdf2hashcat import PdfParser
@@ -46,10 +47,17 @@ class TestPdfParser(unittest.TestCase):
         mock_get_dict.return_value = enc_dict or self.STANDARD_ENC_DICT
         return PdfParser("dummy.pdf")
 
+    def _parse_output(self, parser):
+        """Run the parser and return the emitted hash without its newline."""
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            parser.parse()
+        return output.getvalue().rstrip("\n")
+
     def _assert_parse_succeeds(self, parser, msg="Parse should succeed"):
         """Assert that parser.parse() completes without exception."""
         try:
-            parser.parse()
+            return self._parse_output(parser)
         except Exception as exc:
             self.fail(f"{msg}: {exc}")
 
@@ -182,6 +190,77 @@ class TestPdfParser(unittest.TestCase):
         self._assert_parse_fails_with(parser, "FOPN_foweb")
 
     # =========================================================================
+    # Encryption dictionary string tests
+    # =========================================================================
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_named_escapes(self, mock_file):
+        """PDF-defined literal escapes must become their byte values."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (A\\nB\\rC\\tD\\bE\\fF\\\\G) /O (owner)"
+        )
+        self.assertEqual(
+            values,
+            "13*410a420d43094408450c465c47*5*6f776e6572",
+        )
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_unknown_escapes_drop_backslash(self, mock_file):
+        """Unknown PDF escapes preserve the byte and discard the backslash."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (\\s\\e\\v\\a) /O (owner)"
+        )
+        self.assertEqual(values, "4*73657661*5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_octal_and_line_rules(self, mock_file):
+        """Octal escapes and PDF line handling must decode before hashing."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (A\\101\\12B\\\r\nC\rD\nE) /O (owner)"
+        )
+        self.assertEqual(values, "9*41410a42430a440a45*5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_escaped_closing_parenthesis(self, mock_file):
+        """An escaped right parenthesis is data, not the string terminator."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (left\\)right) /O (owner)"
+        )
+        self.assertEqual(
+            values,
+            "10*6c656674297269676874*5*6f776e6572",
+        )
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_literal_string_balanced_parentheses(self, mock_file):
+        """Balanced unescaped parentheses may occur inside a PDF string."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U (a(b)c) /O (owner)"
+        )
+        self.assertEqual(values, "5*6128622963*5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_empty_literal_string_value(self, mock_file):
+        """Empty literal strings are valid PDF string objects."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(b"/U () /O (owner)")
+        self.assertEqual(values, "0**5*6f776e6572")
+
+    @patch("builtins.open", new_callable=mock_open, read_data=PDF_HEADER)
+    def test_hex_string_whitespace_and_odd_nibble(self, mock_file):
+        """Hex strings ignore PDF whitespace and pad a final odd nibble."""
+        parser = PdfParser("dummy.pdf")
+        values = parser.get_passwords_for_JtR(
+            b"/U <61 62\n6> /O <6f776e6572>"
+        )
+        self.assertEqual(values, "3*616260*5*6f776e6572")
+
+    # =========================================================================
     # Compact object layout tests (no newline before "<id> obj")
     # =========================================================================
 
@@ -195,6 +274,24 @@ class TestPdfParser(unittest.TestCase):
                 b" /Root 1 0 R /ID [" + trailer_id + \
                 b"] /Encrypt " + encrypt_ref + b" R>>\n%%EOF"
         return body
+
+    def test_parse_emits_decoded_literal_string_hash(self):
+        """Literal string syntax must be reflected in the emitted hash."""
+        enc_dict = b"<</V 2 /R 3 /Length 128 /P -3904 " \
+                   b"/Filter /Standard " \
+                   b"/U (left\\)right) /O (\\101\\e)>>"
+        pdf_bytes = self._make_pdf_bytes(
+            [(b"1 0", b"<</Type /Catalog>>"),
+             (b"5 0", enc_dict)],
+        )
+        with patch("builtins.open", mock_open(read_data=pdf_bytes)):
+            parser = PdfParser("dummy.pdf")
+
+        self.assertEqual(
+            self._parse_output(parser),
+            "$pdf$2*3*128*-3904*1*2*abcd*"
+            "10*6c656674297269676874*2*4165",
+        )
 
     def test_compact_layout_encrypt_object(self):
         """Encrypt object preceded by space (not \\r\\n) must still parse.
